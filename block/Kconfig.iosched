@@ -32,6 +32,15 @@ config IOSCHED_CFQ
 
 	  This is the default I/O scheduler.
 
+config IOSCHED_SSTF
+	tristate "SSTF I/O scheduler"
+	default y
+	---help---
+	  The SSTF I/O sheduler uses a simple CLOOK algorithm to service
+	  requests in an order dependent on spatial locality with regards
+	  to the disk's read/write head and the direction it moves in.
+	  Albeit only in one direction.
+
 config CFQ_GROUP_IOSCHED
 	bool "CFQ Group Scheduling support"
 	depends on IOSCHED_CFQ && BLK_CGROUP
@@ -46,6 +55,9 @@ choice
 	  Select the I/O scheduler which will be used by default for all
 	  block devices.
 
+	config DEFAULT_SSTF
+		bool "SSTF" if IOSCHED_SSTF=y
+
 	config DEFAULT_DEADLINE
 		bool "Deadline" if IOSCHED_DEADLINE=y
 
@@ -59,6 +71,7 @@ endchoice
 
 config DEFAULT_IOSCHED
 	string
+	default "sstf" if DEFAULT_SSTF
 	default "deadline" if DEFAULT_DEADLINE
 	default "cfq" if DEFAULT_CFQ
 	default "noop" if DEFAULT_NOOP
