@@ -32,6 +32,13 @@ static int sstf_dispatch(struct request_queue *q, int force)
 
 		head = blk_rq_pos(rq);
 
+//used to show that we have a correct solution
+		printk("request dispatched %llu\n", head);
+		printk("queue contents: \n");
+		list_for_each(head, &nd->queue) 
+			printk("%llu, ", blk_rq_pos(list_entry(head, struct request, queuelist)));
+
+
 		return 1;
 	}
 	return 0;
