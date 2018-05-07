@@ -1,0 +1,84 @@
+\documentclass[10pt, onecolumn, letterpaper, draftclsnofoot]{IEEEtran}
+
+\usepackage{geometry}
+\geometry{margin=0.75in}
+
+\usepackage[utf8]{inputenc}
+\fontfamily{cmss}
+
+% used for bash script
+\usepackage{listings}
+\usepackage{xcolor}
+
+\usepackage{setspace} \singlespacing
+
+\title{Assignment 2}
+\author{Miles Davies, Sonica Gupta, Ryan Sisco \\ Group 29 \\ CS 444: Spring 2018}
+
+\begin{document}
+
+\maketitle
+\begin{abstract}
+\noindent This assignment write up shows the steps we took to implement a solution based on the current noop implementation in our directory. We wrote a new file titled sstf-iosched.c that contains our solution to the problem. This solution utilizes the LOOK algorithm. The implementation portion of this assignment built off of the background research that had went in when we had got the QEMU environment set up in the last assignment, thereby furthering our understanding on how the internal structure, more spefically input/output scheduler, works at kernal level. 
+\end{abstract}
+
+\newpage
+
+\tableofcontents
+\newpage
+
+
+\section{Design}
+In order to implement the LOOK algorithms, we had to sit down as a group and determine what exactly we would be doing. We used scratch paper and designed how our functions would traverse. Our plan was to start scanning and work our all the way in, then jump all the way out, and finally back in to the beginning.
+
+Currently, there is an implementation of the Noop I/O scheduler; however, this does not perform any of the mergin or sorting. There is also the elevator algorithm, which does the merging and sorting. So, by examining the code in both these files, we knew we would need to adjust the add and dispatch functions because these functions affect how items are addded to the list. Additionally, we knew we would need to adjust the Kconfig and Makefile, so that our knew implementation would be loaded and ran. 
+
+
+\section{Version Control Log}
+Used github as version control system and git log for the log info \par
+\input{log.tex}
+
+\section{Work Log}
+We met up on Friday to work on the background stuff. For insance, looking up information on the different algorithms and then describing to us how the implementation should look like. Then we all talked through the implementation, what functions and files needed to be changed. In this case only the sstf-iosched file, kConfig, and the Makefile. From there is when we broke to start working on portions of the assignment individually. For instance, the actual implementation was possible to do individually because we had talked through the solution in depth and had a firm idea of what the product was to look like. Then we all did the write-up, each of us working on different sections until the document is done. 
+
+\section{Given Questions}
+\begin{enumerate}
+\item{\textbf{What do you think the main point of the assignment was?}}\\
+We belive that the point of the assignment was to get used to how the kernal operates and how future modifications could be made. In class we were already introduced to different I/O schedulers such as the deadline I/O scheduler, the anticipatory I/O scheduler, and the complete fair queuing I/O scheduler. All these schedulers affect how items are read and written out of a buffer stream. By not only understanding but also writting an algorithm, we are able to better understand the process, especially because there are so many and accross so many platforms. More specifically, through this assignment, we learned about how CLOCK and LOOK worked in general. 
+
+\item{\textbf{How did you personally approach the problem? Design decisions, algorithm, etc.}}\\
+We approached the problem by looking up the algorithms first and learning about the processes. For instance, since this is an elevator algorithm, we looked up what that was. This algorithm performs both merging and sorting, both of which are not supported by the noop i/o scheduler. 
+
+After we had done our background research, we decided to look at the code within the noop I/O scheduler file and also the elevator file. Since, we knew we had to adjust how the items are going to be inserted, we knew we had to adjust the add function, so that the requests would be handled in an ordered structure as opposed to no order. 
+
+\item{\textbf{How did you ensure your solution was correct? Testing details, for instance.}}\\
+We knew our solution was correct by using print statements within the sstf file. Within the dispatch function shows how and where the contents in the queue. So, when an item is placed into the queue, the head is printed along with the content. We did this by utilizing the head and then traversing through the queue to capture each element. Then the contents are printed to the screen. Analyzing the output is how we knew we had come to the correct solution.
+
+\item{\textbf{What did you learn?}}\\
+Through this assignment, we learned how schedulers could be customized to implement a particular algorithm. For instance, with this assignment, we used the noop I/O scheduler and implemented some functionality within one method that handled requests. This changed how the requests were handled, even though we were were using the same scheduler. This shows the reason behind all the different schedulers not only in Linux but also between the different Operating Systems. 
+
+\item{\textbf{How should the TA evaluate your work?}}\\
+If the TA would like to run the module, they go by the following steps first: 
+\begin{itemize}
+
+\item {Make sure sstf is selected} \\
+The TA should first use \textbf {make menuconfig} then select \textit{Enable the Block Layer} and then go to \textit{IO Schedulers}, and then make sure the \textit{SSTF I/O scheduler} is selected.
+
+\item {Compile} \\
+The TA should then use \textbf{make defconfig} and then \textbf{make -j4 all}. This will comile all the files including the sstf file. 
+
+\item {Potential Error} \\
+If a make error occurs with problems locating a .config file, use \textbf{make distclean}. This cleans up the make files that was generated with the automake. Then go back and repeat the process. 
+
+\item {Start qemu}
+The TA should first source (\textbf{source /scratch/opt/environment-setup-i586-pocky-linux.csh}) and then run this command: \textbf{qemu-system-i386 -gdb tcp::5529 -nographic -S -kernel bzImage-qemux86.bin -drive file=core-image-lsb-sdk-qemux86.ext4 -enable-kvm -net none -usb -localtime -no-reboot -append "root=/dev/hda rw console=ttyS0 debug"}
+
+\item {Test}
+There are print statements inplemented within the sstf io scheduler file that could be used in conjunction with the test file to show that the scheduler is doing its job by handling the requests. 
+
+\end{itemize}
+
+Another option would be to go through this document and see that we have went through all the steps to get to a solution. Additionally, the code within the sstf file backs up the steps we have taken. 
+
+\end{enumerate}
+\end{document} 
