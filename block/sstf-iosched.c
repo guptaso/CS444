@@ -40,14 +40,15 @@ static int sstf_dispatch(struct request_queue *q, int force)
 static void sstf_add_request(struct request_queue *q, struct request *rq)
 {
 	struct sstf_data *nd = q->elevator->elevator_data;
-	struct list_head *head = &nd->queue;
+	struct list_head *h = &nd->queue;
+	struct list_head *t = NULL;
 	struct request *req = NULL;
 	int reqPos = -1;
 	int curPos = -1;
 
-	while(head != NULL)
+	while(h != NULL)
 	{
-		req = list_entry(head, struct request, queuelist);
+		req = list_entry(h, struct request, queuelist);
 		reqPos = blk_rq_pos(rq);
 		curPos = blk_rq_pos(req);
 		
@@ -55,7 +56,8 @@ static void sstf_add_request(struct request_queue *q, struct request *rq)
 		{
 			if(reqPos < curPos || curPos < head)
 			{
-				list_add_tail(&rq->queuelist, head);
+				list_add_tail(&rq->queuelist, h);
+				reqPos = -1;
 				break;
 			}
 		}
@@ -63,13 +65,20 @@ static void sstf_add_request(struct request_queue *q, struct request *rq)
 		{
 			if(curPos < head && reqPos < curPos)
 			{
-				list_add_tail(&rq->queuelist, head);
+				list_add_tail(&rq->queuelist, h);
+				reqPos = -1;
 				break;
 			}
 		
 		}
 
-		head = head.next;
+		t = h;
+		h = nd->queue.next;
+	}
+
+	if(reqPos != -1)
+	{
+		list_add(&rq->queuelist, t);
 	}
 }
 
