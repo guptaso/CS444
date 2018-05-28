@@ -98,7 +98,7 @@ static void sbd_transfer(struct sbd_device *dev, sector_t sector,
 		datagroup2 = dev->data + offset;
 		//printk("before decryption: %s\n", dev->data);
 		for (i = 0; i < nbytes; i+=cipherBlockSize) 
-			crypto_cipher_decrypt_one(n_crypt, datagroup2+i, datagroup1+i);
+			crypto_cipher_decrypt_one(n_crypt, datagroup1+i, datagroup2+i);
 		//printk("after decryption: %s\n", dev->data);
 	}
 }
