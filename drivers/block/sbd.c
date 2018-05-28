@@ -21,6 +21,8 @@
 #include <linux/genhd.h>
 #include <linux/blkdev.h>
 #include <linux/hdreg.h>
+#include <linux/crypto.h> /* generic registration functions */
+#include <linux/scatterlist.h>
 
 MODULE_LICENSE("Dual BSD/GPL");
 static char *Version = "1.4";
@@ -31,6 +33,13 @@ static int logical_block_size = 512;
 module_param(logical_block_size, int, 0);
 static int nsectors = 1024; /* How big the drive is */
 module_param(nsectors, int, 0);
+
+/* The folllowing is the key as a module parameter 
+ *  (as specified by assignment instructions) 
+ */
+static char *key = "staticKey00";
+module_param(key, charp, 0);
+
 
 /*
  * We can tweak our hardware sector size, but the kernel talks to us
@@ -51,24 +60,43 @@ static struct sbd_device {
 	spinlock_t lock;
 	u8 *data;
 	struct gendisk *gd;
+
+	/* Inserted a struct for the crypto_cipher */
+	struct crypto_cipher *sbdCipher;	
 } Device;
 
 /*
  * Handle an I/O request.
  */
 static void sbd_transfer(struct sbd_device *dev, sector_t sector,
-		unsigned long nsect, char *buffer, int write) {
+	unsigned long nsect, char *buffer, int write) {
 	unsigned long offset = sector * logical_block_size;
 	unsigned long nbytes = nsect * logical_block_size;
+
+	// added this to get the size of the block
+	unsigned int cipherBlockSize = crypto_cipher_blocksize(dev->sbdCipher);
 
 	if ((offset + nbytes) > dev->size) {
 		printk (KERN_NOTICE "sbd: Beyond-end write (%ld %ld)\n", offset, nbytes);
 		return;
 	}
-	if (write)
-		memcpy(dev->data + offset, buffer, nbytes);
-	else
-		memcpy(buffer, dev->data + offset, nbytes);
+	int i;	
+	// changed to reflect encryption when writing and decription when reading the data
+	// also, this needs to keep occuring for the size of the block
+	if (write) {
+		printk("before encryption: %s\n", dev->data);
+		for (i = 0; i < nbytes; i+=cipherBlockSize) 
+			crypto_cipher_encrypt_one(dev->sbdCipher, buffer, dev->data + offset);
+		printk("after encryption: %s\n", dev->data);
+//		memcpy(dev->data + offset, buffer, nbytes);
+	}
+	else {
+		printk("before decryption: %s\n", dev->data);
+		for (i = 0; i < nbytes; i+=cipherBlockSize) 
+			crypto_cipher_decrypt_one(dev->sbdCipher, dev->data + offset, buffer);
+		printk("after decryption: %s\n", dev->data);
+	}
+//		memcpy(buffer, dev->data + offset, nbytes);
 }
 
 static void sbd_request(struct request_queue *q) {
