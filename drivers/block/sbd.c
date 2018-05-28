@@ -88,7 +88,7 @@ static void sbd_transfer(struct sbd_device *dev, sector_t sector,
 		for (i = 0; i < nbytes; i+=cipherBlockSize) 
 			crypto_cipher_encrypt_one(dev->sbdCipher, buffer, dev->data + offset);
 		printk("after encryption: %s\n", dev->data);
-//		memcpy(dev->data + offset, buffer, nbytes);
+		memcpy(dev->data + offset, buffer, nbytes);
 	}
 	else {
 		printk("before decryption: %s\n", dev->data);
@@ -96,7 +96,7 @@ static void sbd_transfer(struct sbd_device *dev, sector_t sector,
 			crypto_cipher_decrypt_one(dev->sbdCipher, dev->data + offset, buffer);
 		printk("after decryption: %s\n", dev->data);
 	}
-//		memcpy(buffer, dev->data + offset, nbytes);
+		memcpy(buffer, dev->data + offset, nbytes);
 }
 
 static void sbd_request(struct request_queue *q) {
