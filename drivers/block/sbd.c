@@ -39,7 +39,7 @@ module_param(nsectors, int, 0);
  */
 static char *key = "staticKey00";
 module_param(key, charp, 0);
-
+struct crypto_cipher *n_crypt;
 
 /*
  * We can tweak our hardware sector size, but the kernel talks to us
@@ -60,9 +60,9 @@ static struct sbd_device {
 	spinlock_t lock;
 	u8 *data;
 	struct gendisk *gd;
-
 	/* Inserted a struct for the crypto_cipher */
-	struct crypto_cipher *sbdCipher;	
+//	struct crypto_cipher *sbdCipher;	
+	//sbdCipher = crypto_alloc_cipher("sha1", 0, 0);
 } Device;
 
 /*
@@ -74,29 +74,33 @@ static void sbd_transfer(struct sbd_device *dev, sector_t sector,
 	unsigned long nbytes = nsect * logical_block_size;
 
 	// added this to get the size of the block
-	unsigned int cipherBlockSize = crypto_cipher_blocksize(dev->sbdCipher);
-
+	unsigned int cipherBlockSize = crypto_cipher_blocksize(n_crypt);
 	if ((offset + nbytes) > dev->size) {
 		printk (KERN_NOTICE "sbd: Beyond-end write (%ld %ld)\n", offset, nbytes);
 		return;
 	}
+	u8 *datagroup1;
+	u8 *datagroup2;
 	int i;	
+	crypto_cipher_setkey(n_crypt, key, 11);
 	// changed to reflect encryption when writing and decription when reading the data
 	// also, this needs to keep occuring for the size of the block
 	if (write) {
-		printk("before encryption: %s\n", dev->data);
+		//printk("before encryption: %s\n", dev->data);
+		datagroup2 = buffer;
+		datagroup1 = dev->data + offset;
 		for (i = 0; i < nbytes; i+=cipherBlockSize) 
-			crypto_cipher_encrypt_one(dev->sbdCipher, buffer, dev->data + offset);
-		printk("after encryption: %s\n", dev->data);
-		memcpy(dev->data + offset, buffer, nbytes);
+			crypto_cipher_encrypt_one(n_crypt, datagroup1 + i, datagroup2 + i);
+		//printk("after encryption: %s\n", dev->data);
 	}
 	else {
-		printk("before decryption: %s\n", dev->data);
+		datagroup1 = buffer;
+		datagroup2 = dev->data + offset;
+		//printk("before decryption: %s\n", dev->data);
 		for (i = 0; i < nbytes; i+=cipherBlockSize) 
-			crypto_cipher_decrypt_one(dev->sbdCipher, dev->data + offset, buffer);
-		printk("after decryption: %s\n", dev->data);
+			crypto_cipher_decrypt_one(n_crypt, datagroup2+i, datagroup1+i);
+		//printk("after decryption: %s\n", dev->data);
 	}
-		memcpy(buffer, dev->data + offset, nbytes);
 }
 
 static void sbd_request(struct request_queue *q) {
@@ -152,6 +156,7 @@ static int __init sbd_init(void) {
 	/*
   	* Set up our internal device.
   	*/
+  	n_crypt = crypto_alloc_cipher("sha1", 0, 0);
 	Device.size = nsectors * logical_block_size;
 	spin_lock_init(&Device.lock);
 	Device.data = vmalloc(Device.size);
