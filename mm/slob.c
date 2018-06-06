@@ -214,12 +214,15 @@ static void slob_free_pages(void *b, int order)
 /*
  * Allocate a slob block within a given slob_page sp.
  */
-static void *slob_page_alloc(struct page *sp, size_t size, int align)
+// Nodes: prev, cur, aligned, next
+
+
+static void *slob_page_alloc(struct slob_page *sp, size_t size, int align)
 {
-	slob_t *prev, *cur, *aligned = NULL;
+	slob_t *prev, *cur, *best_fit, *aligned = NULL;
 	int delta = 0, units = SLOB_UNITS(size);
 
-	for (prev = NULL, cur = sp->freelist; ; prev = cur, cur = slob_next(cur)) {
+	for (prev = NULL, cur = sp->free; ; prev = cur, cur = slob_next(cur)) {
 		slobidx_t avail = slob_units(cur);
 
 		if (align) {
@@ -243,12 +246,23 @@ static void *slob_page_alloc(struct page *sp, size_t size, int align)
 				if (prev)
 					set_slob(prev, slob_units(prev), next);
 				else
-					sp->freelist = next;
+					sp->free = next;
 			} else { /* fragment */
 				if (prev)
+					best_fit = prev;
+					while(next != NULL) {
+						next = slob_next(cur);
+						prev = cur;
+						cur = aligned;
+						avail = slob_units(cur);
+						if (!(avail < slob_units(next))) {
+							best_fit = next;
+						}
+					}
+					prev = best_fit;
 					set_slob(prev, slob_units(prev), cur + units);
 				else
-					sp->freelist = cur + units;
+					sp->free = cur + units;
 				set_slob(cur + units, avail - units, next);
 			}
 
