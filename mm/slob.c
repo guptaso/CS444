@@ -67,12 +67,12 @@
 #include <linux/rcupdate.h>
 #include <linux/list.h>
 #include <linux/kmemleak.h>
-
+#include <linux/syscalls.h>
 #include <trace/events/kmem.h>
 
 #include <linux/atomic.h>
-
 #include "slab.h"
+//#include "include/linux/syscalls.h"
 /*
  * slob_block has a field 'units', which indicates size of block if +ve,
  * or offset of next block if -ve (in SLOB_UNITs).
@@ -86,6 +86,10 @@ typedef s16 slobidx_t;
 #else
 typedef s32 slobidx_t;
 #endif
+
+unsigned long memory_used = 0;
+unsigned long  memory_free = 0;
+
 
 struct slob_block {
 	slobidx_t units;
@@ -200,7 +204,7 @@ static void *slob_new_pages(gfp_t gfp, int order, int node)
 
 	if (!page)
 		return NULL;
-
+	memory_free += PAGE_SIZE;
 	return page_address(page);
 }
 
@@ -208,12 +212,12 @@ static void slob_free_pages(void *b, int order)
 {
 	if (current->reclaim_state)
 		current->reclaim_state->reclaimed_slab += 1 << order;
+	memory_free -= PAGE_SIZE;
 	free_pages((unsigned long)b, order);
 }
 
+/* ORIGINAL SLOB WITH FIRST FIT ALG */
 /*
- * Allocate a slob block within a given slob_page sp.
- */
 static void *slob_page_alloc(struct page *sp, size_t size, int align)
 {
 	slob_t *prev, *cur, *aligned = NULL;
@@ -226,10 +230,10 @@ static void *slob_page_alloc(struct page *sp, size_t size, int align)
 			aligned = (slob_t *)ALIGN((unsigned long)cur, align);
 			delta = aligned - cur;
 		}
-		if (avail >= units + delta) { /* room enough? */
+		if (avail >= units + delta) { // room enough? 
 			slob_t *next;
 
-			if (delta) { /* need to fragment head to align? */
+			if (delta) { // need to fragment head to align? 
 				next = slob_next(cur);
 				set_slob(aligned, avail - delta, next);
 				set_slob(cur, delta, aligned);
@@ -239,12 +243,12 @@ static void *slob_page_alloc(struct page *sp, size_t size, int align)
 			}
 
 			next = slob_next(cur);
-			if (avail == units) { /* exact fit? unlink. */
+			if (avail == units) { // exact fit? unlink. 
 				if (prev)
 					set_slob(prev, slob_units(prev), next);
 				else
 					sp->freelist = next;
-			} else { /* fragment */
+			} else { // fragment 
 				if (prev)
 					set_slob(prev, slob_units(prev), cur + units);
 				else
@@ -253,15 +257,85 @@ static void *slob_page_alloc(struct page *sp, size_t size, int align)
 			}
 
 			sp->units -= units;
-			if (!sp->units)
+			if (!sp->units) {
 				clear_slob_page_free(sp);
+				memory_used += units;
+			}
 			return cur;
 		}
 		if (slob_last(cur))
 			return NULL;
 	}
 }
+*/ //END OF FIRST FIT ALGORITHM
 
+// START OF BEST FIT ALGORITHM
+/*
+ * Allocate a slob block within a given slob_page sp.
+ */
+
+static void *slob_page_alloc(struct page *sp, size_t size, int align)
+{
+	slob_t *prev, *cur, *best_fit, *aligned = NULL;
+	int delta = 0, units = SLOB_UNITS(size);
+
+	for (prev = NULL, cur = sp->freelist; ; prev = cur, cur = slob_next(cur)) {
+		slobidx_t avail = slob_units(cur);
+
+		if (align) {
+			aligned = (slob_t *)ALIGN((unsigned long)cur, align);
+			delta = aligned - cur;
+		}
+		if (avail >= units + delta) { // room enough? 
+			slob_t *next;
+
+			if (delta) { // need to fragment head to align? 
+				next = slob_next(cur);
+				set_slob(aligned, avail - delta, next);
+				set_slob(cur, delta, aligned);
+				prev = cur;
+				cur = aligned;
+				avail = slob_units(cur);
+			}
+
+			next = slob_next(cur);
+			if (avail == units) { // exact fit? unlink. 
+				if (prev) {
+					best_fit = prev;
+					while(next != NULL) {
+						next = slob_next(cur);
+						prev = cur;
+						cur = aligned;
+						avail = slob_units(cur);
+						if (!(avail < slob_units(next))) {
+							best_fit = next;
+						}
+					}
+					prev = best_fit;
+					set_slob(prev, slob_units(prev), next);
+				}
+				else
+					sp->freelist = next;
+			} else { // fragment 
+				if (prev)
+					set_slob(prev, slob_units(prev), cur + units);
+				else
+					sp->freelist = cur + units;
+				set_slob(cur + units, avail - units, next);
+			}
+
+			sp->units -= units;
+			if (!sp->units) {
+				clear_slob_page_free(sp);
+				memory_used += units;
+			}
+			return cur;
+		}
+		if (slob_last(cur))
+			return NULL;
+	}
+}
+// END OF BEST FIT ALGORITHM
 /*
  * slob_alloc: entry point into the slob allocator.
  */
@@ -300,7 +374,7 @@ static void *slob_alloc(size_t size, gfp_t gfp, int align, int node)
 		b = slob_page_alloc(sp, size, align);
 		if (!b)
 			continue;
-
+		printk("in the slob\n");
 		/* Improve fragment distribution and reduce our average
 		 * search time by starting our next search here. (see
 		 * Knuth vol 1, sec 2.5, pg 449) */
@@ -387,7 +461,7 @@ static void slob_free(void *block, int size)
 	 * point.
 	 */
 	sp->units += units;
-
+	memory_used -= units;
 	if (b < (slob_t *)sp->freelist) {
 		if (b + units == sp->freelist) {
 			units += slob_units(sp->freelist);
@@ -640,3 +714,17 @@ void __init kmem_cache_init_late(void)
 {
 	slab_state = FULL;
 }
+
+
+// compare values returned by each of the function will give an idea 
+// 	of the degree of fragmentation suffered by SLOB
+
+SYSCALL_DEFINE0(slob_mem_used) {
+	return memory_used;
+}
+
+SYSCALL_DEFINE0(slob_mem_free) {
+	return memory_free;
+}
+ 
+
